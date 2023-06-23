@@ -1,0 +1,170 @@
+title: "od_ego"
+author: "Jack Goldberg"
+date: "2023-06-22"
+output: html_document
+---
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(haven)
+library(ggplot2)
+library(dplyr)
+```
+
+
+
+```{r}
+
+ego = read_dta("~/Downloads/matrix3.dta")
+
+vignettes = read_dta("~/Downloads/UPenn-Kantar_Public-Social_Norms-Phase_2-Final.dta")
+
+panel = read_dta("~/Downloads/panel.dta")
+
+w1 = read_dta("~/Downloads/wave1_longcleaned_Rcormatexp.dta")
+
+
+
+```
+
+
+```{r}
+densities = c()
+ids = c()
+nes = c()
+
+for (id in unique(ego$UniqueID)) {
+    
+    strengths = ego$strenth[ego$UniqueID == id & ego$id1 != id]
+    
+    strengths = strengths[strengths != 8]
+    
+    know_dummy = ifelse(strengths == 4 | strengths == 5 | strengths == 3, 0, 1)
+    
+    if (length(know_dummy) == 1) {
+        density = 1
+    }else{
+        density = length(know_dummy[know_dummy == 1]) / (length(know_dummy)*(length(know_dummy) - 1))
+    }
+    
+    
+    normative_ex = panel$O4_2[panel$UniqueID == id] #check matching criteria
+    
+    densities = c(densities, density)
+    ids = c(ids, id)
+    nes = c(nes, normative_ex)
+    
+}
+
+
+
+density_frame = data.frame(density = densities, id =  ids, nx = nes)
+
+density_frame = na.omit(density_frame)
+
+
+```
+
+```{r}
+d_model = lm(density_frame$nx ~ density_frame$density)
+summary(d_model)
+
+ggplot(data = density_frame, aes(x = density, y = nx)) + geom_point()
+
+ggplot(data = panel, aes(x=O6_2)) + geom_histogram()
+```
+
+```{r}
+sub = panel %>% select(matches("D13B|UniqueID|state_1|psu_1|gender_1")) #are we sure intnr is the matching one?
+
+
+
+use_vec = c()
+id_vec  = c()
+state   = c()
+psu     = c()
+gender  = c()
+
+for (k in 1:nrow(sub)) {
+
+    id_vec = c(id_vec, sub[k,]$UniqueID)
+    
+    state = c(state, sub[k,]$state_1)
+    psu   = c(psu, sub[k,]$psu_1)
+    gender   = c(gender, sub[k,]$gender_1)
+    
+    use_vec = c(use_vec, sum(ifelse(as.numeric(sub[k,])[!is.na(as.numeric(sub[k,]))] == 4 | as.numeric(sub[k,])[!is.na(as.numeric(sub[k,]))] == 9, 0, 1)))
+
+}
+
+length(state)
+length(psu)
+length(gender)
+
+use_frame = data.frame(use = use_vec, id = id_vec, state, psu, gender)
+
+```
+
+
+```{r}
+
+
+
+
+use_frame = na.omit(use_frame)
+
+density_frame = density_frame[is.element(density_frame$id, use_frame$id),]
+use_frame = use_frame[is.element(density_frame$id, use_frame$id),]
+
+
+
+matched_nx = c()
+matched_density = c()
+matched_use = c()
+matched_id = c()
+matched_state = c()
+matched_psu = c()
+matched_gender = c()
+for (row in 1:nrow(density_frame)) {
+    
+    matched_use = c(matched_use,use_frame$use[use_frame$id == density_frame[row,]$id])
+    matched_density = c(matched_density,density_frame$density[use_frame$id == density_frame[row,]$id])
+    matched_nx = c(matched_nx,density_frame$nx[use_frame$id == density_frame[row,]$id])
+    matched_id = c(matched_id,density_frame$id[use_frame$id == density_frame[row,]$id])
+    
+    matched_state = c(matched_state, use_frame$state[use_frame$id == density_frame[row,]$id])
+    matched_psu = c(matched_psu, use_frame$psu[use_frame$id == density_frame[row,]$id])
+    matched_gender = c(matched_gender, use_frame$gender[use_frame$id == density_frame[row,]$id])
+}
+
+
+
+merged_frame = data.frame(id = matched_id, density = matched_density, nx = matched_nx, use = matched_use, state = matched_state, psu = matched_psu, gender = matched_gender)
+
+
+merged_frame = na.omit(merged_frame)
+
+
+m_lm = lm(data = merged_frame[merged_frame$gender == 1,], nx ~ density*use)
+summary(m_lm)
+m_lm = lm(data = merged_frame[merged_frame$gender == 2,], nx ~ density*use)
+summary(m_lm)
+m_lm = lm(data = merged_frame[merged_frame$psu == 1,], nx ~ density*use)
+summary(m_lm)
+m_lm = lm(data = merged_frame[merged_frame$psu == 2,], nx ~ density*use)
+summary(m_lm)
+m_lm = lm(data = merged_frame[merged_frame$psu == 3,], nx ~ density*use)
+summary(m_lm)
+m_lm = lm(data = merged_frame[merged_frame$state == 1,], nx ~ density*use)
+summary(m_lm)
+m_lm = lm(data = merged_frame[merged_frame$state == 2,], nx ~ density*use)
+
+summary(m_lm)
+
+```
+
+
